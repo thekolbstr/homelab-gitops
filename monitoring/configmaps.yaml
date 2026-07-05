@@ -35,9 +35,6 @@ kind: ConfigMap
 metadata:
   name: alertmanager-ntfy-config
   namespace: monitoring
-  annotations:
-    # NOTE: this ConfigMap backs the alertmanager-ntfy Deployment, which appears
-    # unreferenced by alertmanager-config's actual receivers. Verify before pruning.
 data:
   config-media.yml: |
     http:
@@ -259,6 +256,24 @@ data:
           - action: labelmap
             regex: __meta_kubernetes_node_label_(.+)
 
+      # Longhorn manager metrics (volume robustness, replica health, etc.)
+      - job_name: 'longhorn-manager'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ['longhorn-system']
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: longhorn-manager
+          - source_labels: [__address__]
+            action: replace
+            regex: '(.*):.*'
+            replacement: '${1}:9500'
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+
       # Sonarr native metrics
       - job_name: 'sonarr'
         static_configs:
@@ -322,6 +337,15 @@ data:
               summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
               description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was killed due to out of memory."
 
+          - alert: PodStuckTerminating
+            expr: (time() - kube_pod_deletion_timestamp) > 600
+            for: 0m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} stuck terminating"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has had a deletion timestamp set for more than 10 minutes without finishing termination. This pattern previously starved Longhorn's controller queue cluster-wide."
+
       - name: node-alerts
         rules:
           - alert: NodeNotReady
@@ -368,6 +392,35 @@ data:
             annotations:
               summary: "High memory usage on {{ $labels.instance }}"
               description: "Memory usage on {{ $labels.instance }} is above 90% (current: {{ $value | printf \"%.1f\" }}%)."
+
+      - name: longhorn-alerts
+        rules:
+          - alert: LonghornVolumeDegraded
+            expr: longhorn_volume_robustness == 2
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Longhorn volume {{ $labels.volume }} is degraded"
+              description: "Volume {{ $labels.volume }} has been degraded (missing a healthy replica) for more than 5 minutes."
+
+          - alert: LonghornVolumeFaulted
+            expr: longhorn_volume_robustness == 3
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Longhorn volume {{ $labels.volume }} is faulted"
+              description: "Volume {{ $labels.volume }} has no healthy replicas and is faulted. Data may be inaccessible."
+
+          - alert: LonghornShareManagerStuckTerminating
+            expr: (time() - kube_pod_deletion_timestamp{namespace="longhorn-system", pod=~"share-manager-.*"}) > 300
+            for: 0m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Longhorn share-manager {{ $labels.pod }} stuck terminating"
+              description: "share-manager pod {{ $labels.pod }} has been stuck terminating for more than 5 minutes. This exact pattern previously starved Longhorn's work queue and blocked all volume attach/detach cluster-wide."
 
       - name: vpn-stack-alerts
         rules:
