@@ -181,8 +181,16 @@ spec:
       labels:
         app: jellyfin
     spec:
-      nodeSelector:
-        gpu: rtx3060
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: gpu
+                operator: In
+                values:
+                - rtx3060
+                - teslap4
       runtimeClassName: nvidia
       containers:
       - env:
@@ -238,8 +246,16 @@ spec:
       labels:
         app: ollama
     spec:
-      nodeSelector:
-        gpu: rtx3060
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: gpu
+                operator: In
+                values:
+                - rtx3060
+                - teslap4
       runtimeClassName: nvidia
       containers:
       - env:
@@ -253,9 +269,6 @@ spec:
         name: ollama
         ports:
         - containerPort: 11434
-        resources:
-          limits:
-            nvidia.com/gpu: 1
         volumeMounts:
         - mountPath: /models
           name: appdata
@@ -321,8 +334,16 @@ spec:
       labels:
         app: plex
     spec:
-      nodeSelector:
-        gpu: rtx3060
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: gpu
+                operator: In
+                values:
+                - rtx3060
+                - teslap4
       runtimeClassName: nvidia
       containers:
       - env:
@@ -546,6 +567,17 @@ spec:
       labels:
         app: tdarr
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: gpu
+                operator: In
+                values:
+                - rtx3060
+                - teslap4
+      runtimeClassName: nvidia
       containers:
       - env:
         - name: TZ
@@ -577,9 +609,6 @@ spec:
           name: webui
         - containerPort: 8266
           name: server
-        resources:
-          limits:
-            nvidia.com/gpu: 1
         volumeMounts:
         - mountPath: /app/configs
           name: appdata
