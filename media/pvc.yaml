@@ -25,6 +25,10 @@ spec:
       storage: 1Gi
   storageClassName: local-path
 ---
+# NOTE: gotify-pvc (static hostPath, worker node only) is kept here as a
+# retained backup after migrating gotify to Longhorn RWX storage below.
+# Not referenced by any Deployment anymore. Safe to delete once the
+# Longhorn migration has been running reliably for a while.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -38,6 +42,19 @@ spec:
       storage: 2Gi
   storageClassName: ""
   volumeName: gotify-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gotify-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

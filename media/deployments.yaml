@@ -53,15 +53,6 @@ spec:
       labels:
         app: gotify
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values:
-                - worker
       containers:
       - env:
         - name: GOTIFY_SERVER_PORT
@@ -87,7 +78,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: gotify-pvc
+          claimName: gotify-pvc-longhorn
 ---
 apiVersion: apps/v1
 kind: Deployment
