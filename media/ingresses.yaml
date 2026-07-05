@@ -32,27 +32,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: beszel
-  namespace: media
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
-spec:
-  ingressClassName: traefik
-  rules:
-  - host: beszel.home.arpa
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: beszel
-            port:
-              number: 8090
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
   name: dispatcharr
   namespace: media
   annotations:

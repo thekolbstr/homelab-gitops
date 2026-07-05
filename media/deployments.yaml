@@ -39,42 +39,6 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: beszel
-  namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: beszel
-  template:
-    metadata:
-      labels:
-        app: beszel
-    spec:
-      containers:
-      - env:
-        - name: TZ
-          value: America/New_York
-        image: henrygd/beszel:latest
-        name: beszel
-        ports:
-        - containerPort: 8090
-        volumeMounts:
-        - mountPath: /beszel_data
-          name: appdata
-          subPath: beszel
-      volumes:
-      - name: appdata
-        persistentVolumeClaim:
-          claimName: appdata-pvc
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: gotify
   namespace: media
   labels:
