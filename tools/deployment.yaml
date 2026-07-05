@@ -1,0 +1,52 @@
+# NOTE: proxmox-mcp mounts a Secret (proxmox-mcp-config) at /config, containing
+# Proxmox API credentials. That Secret is NOT exported here — manage it out-of-band
+# (sealed-secrets, SOPS, or created manually with kubectl) rather than committing it
+# to Git in plaintext.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxmox-mcp
+  namespace: tools
+  annotations:
+    keel.sh/policy: force
+    keel.sh/pollSchedule: '@every 24h'
+    keel.sh/trigger: poll
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxmox-mcp
+  template:
+    metadata:
+      labels:
+        app: proxmox-mcp
+    spec:
+      containers:
+      - name: proxmox-mcp
+        image: ghcr.io/rekklesna/proxmoxmcp-plus:0.1.0
+        env:
+        - name: PROXMOX_MCP_MODE
+          value: mcp-http
+        - name: MCP_HOST
+          value: 0.0.0.0
+        - name: MCP_PORT
+          value: "8000"
+        - name: MCP_TRANSPORT
+          value: STREAMABLE_HTTP
+        - name: PROXMOX_MCP_CONFIG
+          value: /config/config.json
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - mountPath: /config
+          name: config
+          readOnly: true
+        - mountPath: /data
+          name: data
+      volumes:
+      - name: config
+        secret:
+          secretName: proxmox-mcp-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: proxmox-mcp-data

@@ -1,0 +1,458 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+
+    route:
+      group_by: ['alertname', 'namespace']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: homelab-alerts
+      routes:
+        - match:
+            alertgroup: media
+          receiver: media-alerts
+
+    receivers:
+      - name: homelab-alerts
+        webhook_configs:
+          - url: 'http://gotify-alertmanager.monitoring.svc.cluster.local:8080/homelab'
+            send_resolved: true
+
+      - name: media-alerts
+        webhook_configs:
+          - url: 'http://gotify-alertmanager.monitoring.svc.cluster.local:8080/media'
+            send_resolved: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-ntfy-config
+  namespace: monitoring
+  annotations:
+    # NOTE: this ConfigMap backs the alertmanager-ntfy Deployment, which appears
+    # unreferenced by alertmanager-config's actual receivers. Verify before pruning.
+data:
+  config-media.yml: |
+    http:
+      addr: :8001
+      auth:
+        username: "alertmanager"
+        password: "alertmanager-webhook"
+    ntfy:
+      baseurl: http://ntfy.media.svc.cluster.local:80
+      auth:
+        basic:
+          username: kolby
+          password: Buddy8822
+      notification:
+        topic: media-alerts
+        priority: |
+          status == "firing" && labels.severity == "critical" ? "high" : "default"
+        tags:
+          - tag: "white_check_mark"
+            condition: status == "resolved"
+          - tag: "rotating_light"
+            condition: status == "firing" && labels.severity == "critical"
+          - tag: "warning"
+            condition: status == "firing" && labels.severity == "warning"
+        templates:
+          title: |
+            {{ if eq .Status "resolved" }}✅ Resolved: {{ end }}{{ index .Annotations "summary" }}
+          description: |
+            {{ index .Annotations "description" }}
+  config.yml: |
+    http:
+      addr: :8000
+      auth:
+        username: "alertmanager"
+        password: "alertmanager-webhook"
+    ntfy:
+      baseurl: http://ntfy.media.svc.cluster.local:80
+      auth:
+        basic:
+          username: kolby
+          password: Buddy8822
+      notification:
+        topic: homelab-alerts
+        priority: |
+          status == "firing" && labels.severity == "critical" ? "high" : "default"
+        tags:
+          - tag: "white_check_mark"
+            condition: status == "resolved"
+          - tag: "rotating_light"
+            condition: status == "firing" && labels.severity == "critical"
+          - tag: "warning"
+            condition: status == "firing" && labels.severity == "warning"
+        templates:
+          title: |
+            {{ if eq .Status "resolved" }}✅ Resolved: {{ end }}{{ index .Annotations "summary" }}
+          description: |
+            {{ index .Annotations "description" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blackbox-config
+  namespace: monitoring
+data:
+  blackbox.yml: |
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 10s
+        http:
+          valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+          valid_status_codes: []
+          method: GET
+          follow_redirects: true
+          preferred_ip_protocol: "ip4"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gotify-alertmanager-script
+  namespace: monitoring
+data:
+  server.py: |
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import json, urllib.request, urllib.parse, os
+
+    GOTIFY_URL = os.environ.get("GOTIFY_URL", "http://gotify.media.svc.cluster.local:80")
+    TOKEN_HOMELAB = os.environ.get("TOKEN_HOMELAB", "")
+    TOKEN_MEDIA = os.environ.get("TOKEN_MEDIA", "")
+    BARK_URL = os.environ.get("BARK_URL", "")
+    BARK_KEY = os.environ.get("BARK_KEY", "")
+
+    PRIORITY_MAP = {"critical": 10, "warning": 5}
+
+    def send_gotify(token, title, message, priority):
+        url = f"{GOTIFY_URL}/message?token={token}"
+        data = json.dumps({"title": title, "message": message, "priority": priority}).encode()
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req)
+        except Exception as e:
+            print(f"Error sending to Gotify: {e}")
+
+    def send_bark(title, message, severity):
+        if not BARK_URL or not BARK_KEY:
+            return
+        level = "critical" if severity == "critical" else "active"
+        t = urllib.parse.quote(title)
+        m = urllib.parse.quote(message or " ")
+        url = f"{BARK_URL}/{BARK_KEY}/{t}/{m}?level={level}"
+        try:
+            urllib.request.urlopen(url, timeout=5)
+        except Exception as e:
+            print(f"Error sending to Bark: {e}")
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length))
+            token = TOKEN_HOMELAB if "/homelab" in self.path else TOKEN_MEDIA
+
+            for alert in body.get("alerts", []):
+                status = alert.get("status", "firing")
+                labels = alert.get("labels", {})
+                annotations = alert.get("annotations", {})
+                severity = labels.get("severity", "warning")
+                summary = annotations.get("summary", labels.get("alertname", "Alert"))
+                description = annotations.get("description", "")
+                prefix = "✅ Resolved: " if status == "resolved" else ("🚨 " if severity == "critical" else "⚠️ ")
+                title = f"{prefix}{summary}"
+                priority = 5 if status == "resolved" else PRIORITY_MAP.get(severity, 5)
+                send_gotify(token, title, description, priority)
+                send_bark(title, description, severity if status != "resolved" else "resolved")
+
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, format, *args):
+            print(f"{self.address_string()} - {format % args}")
+
+    HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 30s
+      evaluation_interval: 30s
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager.monitoring.svc.cluster.local:9093
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      - job_name: 'kubernetes-nodes'
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/$1/proxy/metrics
+
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      - job_name: 'kube-state-metrics'
+        static_configs:
+          - targets: ['kube-state-metrics.monitoring.svc.cluster.local:8080']
+
+      - job_name: 'node-exporter'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: '(.*):10250'
+            replacement: '${1}:9100'
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
+      # Sonarr native metrics
+      - job_name: 'sonarr'
+        static_configs:
+          - targets: ['sonarr.media.svc.cluster.local:8989']
+        metrics_path: /metrics
+
+      # Radarr native metrics
+      - job_name: 'radarr'
+        static_configs:
+          - targets: ['radarr.media.svc.cluster.local:7878']
+        metrics_path: /metrics
+
+      # Blackbox HTTP probes for media services
+      - job_name: 'blackbox-media'
+        metrics_path: /probe
+        params:
+          module: [http_2xx]
+        static_configs:
+          - targets:
+              - http://tautulli.media.svc.cluster.local:8181
+              - http://seerr.media.svc.cluster.local:5055
+              - http://vpn-stack.media.svc.cluster.local:9191  # dispatcharr
+              - http://vpn-stack.media.svc.cluster.local:8080  # sabnzbd
+              - http://vpn-stack.media.svc.cluster.local:8090  # qbittorrent
+              - http://vpn-stack.media.svc.cluster.local:9696  # prowlarr
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: __param_target
+          - source_labels: [__param_target]
+            target_label: instance
+          - target_label: __address__
+            replacement: blackbox-exporter.monitoring.svc.cluster.local:9115
+  rules.yml: |
+    groups:
+      - name: pod-alerts
+        rules:
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total{pod!~"igotify.*"}[15m]) * 60 * 5 > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times in the last 5 minutes."
+
+          - alert: PodNotReady
+            expr: kube_pod_status_ready{condition="true", namespace!="media"} == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is not ready"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 5 minutes."
+
+          - alert: PodOOMKilled
+            expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled", namespace!="media"} == 1
+            for: 0m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} was killed due to out of memory."
+
+      - name: node-alerts
+        rules:
+          - alert: NodeNotReady
+            expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Node {{ $labels.node }} is not ready"
+              description: "Node {{ $labels.node }} has been not ready for more than 2 minutes."
+
+          - alert: NodeDiskPressure
+            expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Node {{ $labels.node }} is under disk pressure"
+              description: "Node {{ $labels.node }} is reporting disk pressure."
+
+          - alert: NodeMemoryPressure
+            expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Node {{ $labels.node }} is under memory pressure"
+              description: "Node {{ $labels.node }} is reporting memory pressure."
+
+          - alert: HighDiskUsage
+            expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High disk usage on {{ $labels.instance }}"
+              description: "Disk usage on {{ $labels.instance }} is above 85% (current: {{ $value | printf \"%.1f\" }}%)."
+
+          - alert: HighMemoryUsage
+            expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage on {{ $labels.instance }}"
+              description: "Memory usage on {{ $labels.instance }} is above 90% (current: {{ $value | printf \"%.1f\" }}%)."
+
+      - name: vpn-stack-alerts
+        rules:
+          - alert: VPNStackDown
+            expr: kube_pod_status_ready{condition="true", pod=~"vpn-stack.*"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              alertgroup: media
+            annotations:
+              summary: "VPN stack pod is down"
+              description: "The vpn-stack pod has been not ready for more than 2 minutes. Gluetun and dependent services may be offline."
+
+          - alert: VPNStackRestarting
+            expr: rate(kube_pod_container_status_restarts_total{pod=~"vpn-stack.*"}[15m]) * 60 * 5 > 0
+            for: 5m
+            labels:
+              severity: warning
+              alertgroup: media
+            annotations:
+              summary: "VPN stack is restarting"
+              description: "The vpn-stack pod has been restarting frequently. Check Gluetun logs."
+
+      - name: media-pod-alerts
+        rules:
+          - alert: MediaPodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total{namespace="media", pod!~"igotify.*"}[15m]) * 60 * 5 > 0
+            for: 5m
+            labels:
+              severity: critical
+              alertgroup: media
+            annotations:
+              summary: "Media pod {{ $labels.pod }} is crash looping"
+              description: "Pod {{ $labels.pod }} in the media namespace has restarted {{ $value }} times in the last 5 minutes."
+
+          - alert: MediaPodNotReady
+            expr: kube_pod_status_ready{condition="true", namespace="media"} == 0
+            for: 5m
+            labels:
+              severity: warning
+              alertgroup: media
+            annotations:
+              summary: "Media pod {{ $labels.pod }} is not ready"
+              description: "Pod {{ $labels.pod }} in the media namespace has been not ready for more than 5 minutes."
+
+          - alert: MediaPodOOMKilled
+            expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled", namespace="media"} == 1
+            for: 0m
+            labels:
+              severity: warning
+              alertgroup: media
+            annotations:
+              summary: "Media pod {{ $labels.pod }} was OOMKilled"
+              description: "Pod {{ $labels.pod }} in the media namespace was killed due to out of memory."
+
+      - name: igotify-alerts
+        rules:
+          - alert: IgotifyCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total{pod=~"igotify.*"}[15m]) * 60 * 5 > 0
+            for: 5m
+            labels:
+              severity: warning
+              alertgroup: media
+            annotations:
+              summary: "igotify pod {{ $labels.pod }} is crash looping"
+              description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 5 minutes."
+
+      - name: media-service-alerts
+        rules:
+          - alert: MediaServiceDown
+            expr: probe_success{job="blackbox-media"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              alertgroup: media
+            annotations:
+              summary: "Media service {{ $labels.instance }} is down"
+              description: "HTTP probe for {{ $labels.instance }} has been failing for more than 2 minutes."
+
+          - alert: MediaServiceSlowResponse
+            expr: probe_duration_seconds{job="blackbox-media"} > 5
+            for: 5m
+            labels:
+              severity: warning
+              alertgroup: media
+            annotations:
+              summary: "Media service {{ $labels.instance }} is responding slowly"
+              description: "HTTP probe for {{ $labels.instance }} is taking more than 5 seconds to respond."

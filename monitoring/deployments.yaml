@@ -1,0 +1,363 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  annotations:
+    keel.sh/policy: force
+    keel.sh/pollSchedule: '@every 24h'
+    keel.sh/trigger: poll
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: alertmanager
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - worker
+      containers:
+      - args:
+        - --config.file=/etc/alertmanager/alertmanager.yml
+        - --storage.path=/alertmanager
+        image: prom/alertmanager:latest
+        imagePullPolicy: Always
+        name: alertmanager
+        ports:
+        - containerPort: 9093
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        volumeMounts:
+        - mountPath: /etc/alertmanager/alertmanager.yml
+          name: config
+          subPath: alertmanager.yml
+      volumes:
+      - configMap:
+          name: alertmanager-config
+        name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager-ntfy
+  namespace: monitoring
+  annotations:
+    keel.sh/policy: force
+    keel.sh/pollSchedule: '@every 24h'
+    keel.sh/trigger: poll
+    # NOTE: appears unused by current alertmanager-config receivers (which point at
+    # gotify-alertmanager instead). Candidate for removal — verify before deleting.
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: alertmanager-ntfy
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: alertmanager-ntfy
+    spec:
+      containers:
+      - args:
+        - --configs=/etc/alertmanager-ntfy/config.yml
+        image: ghcr.io/alexbakker/alertmanager-ntfy:latest
+        imagePullPolicy: Always
+        name: alertmanager-ntfy-homelab
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /etc/alertmanager-ntfy/config.yml
+          name: config
+          subPath: config.yml
+      - args:
+        - --configs=/etc/alertmanager-ntfy/config-media.yml
+        image: ghcr.io/alexbakker/alertmanager-ntfy:latest
+        imagePullPolicy: Always
+        name: alertmanager-ntfy-media
+        ports:
+        - containerPort: 8001
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /etc/alertmanager-ntfy/config-media.yml
+          name: config
+          subPath: config-media.yml
+      volumes:
+      - configMap:
+          name: alertmanager-ntfy-config
+        name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter
+  namespace: monitoring
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: blackbox-exporter
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: blackbox-exporter
+    spec:
+      containers:
+      - args:
+        - --config.file=/etc/blackbox/blackbox.yml
+        image: prom/blackbox-exporter:latest
+        imagePullPolicy: Always
+        name: blackbox-exporter
+        ports:
+        - containerPort: 9115
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /etc/blackbox/blackbox.yml
+          name: config
+          subPath: blackbox.yml
+      volumes:
+      - configMap:
+          name: blackbox-config
+        name: config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gotify-alertmanager
+  namespace: monitoring
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: gotify-alertmanager
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: gotify-alertmanager
+    spec:
+      containers:
+      - command:
+        - python
+        - /app/server.py
+        env:
+        - name: GOTIFY_URL
+          value: http://gotify.media.svc.cluster.local:80
+        - name: TOKEN_HOMELAB
+          value: ADkuuluxoitlLLb
+        - name: TOKEN_MEDIA
+          value: Aq3MrwJa7aC_u.V
+        - name: BARK_URL
+          value: http://bark.media.svc.cluster.local:8080
+        - name: BARK_KEY
+          value: MUnf3Mv6oGuEoureDjy6VT
+        image: python:3.12-slim
+        imagePullPolicy: IfNotPresent
+        name: gotify-alertmanager
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 25m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /app/server.py
+          name: script
+          subPath: server.py
+      volumes:
+      - configMap:
+          name: gotify-alertmanager-script
+        name: script
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  namespace: monitoring
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: kube-state-metrics
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: kube-state-metrics
+    spec:
+      serviceAccountName: kube-state-metrics
+      containers:
+      - image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.19.0
+        imagePullPolicy: IfNotPresent
+        name: kube-state-metrics
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  annotations:
+    keel.sh/policy: force
+    keel.sh/pollSchedule: '@every 24h'
+    keel.sh/trigger: poll
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: prometheus
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - worker
+      serviceAccountName: prometheus
+      initContainers:
+      - command:
+        - chown
+        - -R
+        - "65534:65534"
+        - /prometheus
+        image: busybox
+        imagePullPolicy: Always
+        name: fix-permissions
+        volumeMounts:
+        - mountPath: /prometheus
+          name: data
+      containers:
+      - args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --storage.tsdb.retention.time=30d
+        - --web.enable-lifecycle
+        image: prom/prometheus:latest
+        imagePullPolicy: Always
+        name: prometheus
+        ports:
+        - containerPort: 9090
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /etc/prometheus/prometheus.yml
+          name: config
+          subPath: prometheus.yml
+        - mountPath: /etc/prometheus/rules/rules.yml
+          name: rules
+          subPath: rules.yml
+        - mountPath: /prometheus
+          name: data
+      volumes:
+      - configMap:
+          name: prometheus-config
+          items:
+          - key: prometheus.yml
+            path: prometheus.yml
+        name: config
+      - configMap:
+          name: prometheus-config
+          items:
+          - key: rules.yml
+            path: rules.yml
+        name: rules
+      - name: data
+        persistentVolumeClaim:
+          claimName: prometheus-pvc
