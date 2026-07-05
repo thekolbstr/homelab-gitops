@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - nvidia-device-plugin-config.yaml
   - longhorn-single-storageclass.yaml
+  - longhorn-ingress.yaml
