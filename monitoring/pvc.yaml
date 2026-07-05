@@ -11,3 +11,16 @@ spec:
       storage: 20Gi
   storageClassName: ""
   volumeName: prometheus-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-pvc-longhorn
+  namespace: monitoring
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 5Gi

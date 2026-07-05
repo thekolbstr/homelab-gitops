@@ -360,4 +360,4 @@ spec:
         name: rules
       - name: data
         persistentVolumeClaim:
-          claimName: prometheus-pvc
+          claimName: prometheus-pvc-longhorn

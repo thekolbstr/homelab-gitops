@@ -12,6 +12,8 @@ spec:
   storageClassName: ""
   volumeName: appdata-pv
 ---
+# NOTE: bark-pvc (old storage) retained as backup after migrating bark to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -56,6 +58,8 @@ spec:
     requests:
       storage: 2Gi
 ---
+# NOTE: igotify-pvc (old storage) retained as backup after migrating igotify to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -70,6 +74,8 @@ spec:
   storageClassName: ""
   volumeName: igotify-pv
 ---
+# NOTE: jellyfin-config-local-pvc (old storage) retained as backup after migrating jellyfin to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -98,6 +104,8 @@ spec:
   storageClassName: ""
   volumeName: media-data-pv
 ---
+# NOTE: plex-config-local-pvc (old storage) retained as backup after migrating plex to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -112,6 +120,8 @@ spec:
   storageClassName: local
   volumeName: plex-config-local-pv
 ---
+# NOTE: radarr-local-pvc (old storage) retained as backup after migrating radarr to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -125,6 +135,8 @@ spec:
       storage: 10Gi
   storageClassName: local
 ---
+# NOTE: sonarr-local-pvc (old storage) retained as backup after migrating sonarr to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -138,6 +150,8 @@ spec:
       storage: 10Gi
   storageClassName: local
 ---
+# NOTE: tautulli-config-local-pvc (old storage) retained as backup after migrating tautulli to Longhorn RWX.
+# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -151,3 +165,94 @@ spec:
       storage: 10Gi
   storageClassName: local
   volumeName: tautulli-config-local-pv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bark-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: igotify-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 6Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radarr-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tautulli-pvc-longhorn
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 2Gi

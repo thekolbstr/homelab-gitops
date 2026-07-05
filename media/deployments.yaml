@@ -34,7 +34,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: bark-pvc
+          claimName: bark-pvc-longhorn
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -133,15 +133,6 @@ spec:
       labels:
         app: igotify
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values:
-                - worker
       containers:
       - env:
         - name: GOTIFY_URLS
@@ -165,7 +156,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: igotify-pvc
+          claimName: igotify-pvc-longhorn
   # NOTE: iGotify persists GOTIFY_URLS/GOTIFY_CLIENT_TOKENS into its own SQLite DB
   # (/app/data/users.db) on first boot and ignores env var changes afterward.
   # Changing these values here will NOT reconfigure an already-initialized instance —
@@ -221,7 +212,7 @@ spec:
       volumes:
       - name: jellyfin-config
         persistentVolumeClaim:
-          claimName: jellyfin-config-local-pvc
+          claimName: jellyfin-pvc-longhorn
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -361,7 +352,7 @@ spec:
       volumes:
       - name: plex-config
         persistentVolumeClaim:
-          claimName: plex-config-local-pvc
+          claimName: plex-pvc-longhorn
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -411,7 +402,7 @@ spec:
       volumes:
       - name: config
         persistentVolumeClaim:
-          claimName: radarr-local-pvc
+          claimName: radarr-pvc-longhorn
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -498,7 +489,7 @@ spec:
       volumes:
       - name: config
         persistentVolumeClaim:
-          claimName: sonarr-local-pvc
+          claimName: sonarr-pvc-longhorn
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -536,7 +527,7 @@ spec:
       volumes:
       - name: tautulli-config
         persistentVolumeClaim:
-          claimName: tautulli-config-local-pvc
+          claimName: tautulli-pvc-longhorn
 ---
 apiVersion: apps/v1
 kind: Deployment

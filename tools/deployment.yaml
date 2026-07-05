@@ -49,4 +49,4 @@ spec:
           secretName: proxmox-mcp-config
       - name: data
         persistentVolumeClaim:
-          claimName: proxmox-mcp-data
+          claimName: proxmox-mcp-data-longhorn
