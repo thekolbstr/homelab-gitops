@@ -256,3 +256,18 @@ spec:
   resources:
     requests:
       storage: 2Gi
+---
+# Longhorn PVC for dispatcharr's Postgres data directory, migrated off the
+# hostPath volume that pinned vpn-stack to node "worker". See deployments.yaml.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dispatcharr-db-pvc
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi

@@ -659,15 +659,6 @@ spec:
       labels:
         app: vpn-stack
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-              - key: kubernetes.io/hostname
-                operator: In
-                values:
-                - worker
       containers:
       - name: gluetun
         image: qmcgaw/gluetun:latest
@@ -778,6 +769,5 @@ spec:
         persistentVolumeClaim:
           claimName: media-data-pvc
       - name: dispatcharr-db
-        hostPath:
-          path: /opt/appdata/dispatcharr/db
-          type: DirectoryOrCreate
+        persistentVolumeClaim:
+          claimName: dispatcharr-db-pvc
