@@ -85,10 +85,6 @@ kind: Deployment
 metadata:
   name: homepage
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   selector:
@@ -167,10 +163,6 @@ kind: Deployment
 metadata:
   name: jellyfin
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   selector:
@@ -315,10 +307,6 @@ kind: Deployment
 metadata:
   name: plex
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   strategy:
@@ -387,10 +375,6 @@ kind: Deployment
 metadata:
   name: radarr
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   strategy:
@@ -433,10 +417,6 @@ kind: Deployment
 metadata:
   name: seerr
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   strategy:
@@ -474,10 +454,6 @@ kind: Deployment
 metadata:
   name: sonarr
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   strategy:
@@ -643,10 +619,6 @@ kind: Deployment
 metadata:
   name: vpn-stack
   namespace: media
-  annotations:
-    keel.sh/policy: force
-    keel.sh/pollSchedule: '@every 24h'
-    keel.sh/trigger: poll
 spec:
   replicas: 1
   strategy:
