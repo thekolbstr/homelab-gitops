@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "kubernetes": {
+    "fileMatch": [
+      "\\.ya?ml$"
+    ]
+  },
+  "kustomize": {
+    "fileMatch": [
+      "(^|/)kustomization\\.ya?ml$"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Plex's version-tag tracking is already handled live by argocd-image-updater (allow-tags regex + newest-build strategy on the plex Application). Disable Renovate for it to avoid two tools fighting over the same image.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/plex"
+      ],
+      "enabled": false
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "schedule": [
+    "before 6am on monday"
+  ]
+}
