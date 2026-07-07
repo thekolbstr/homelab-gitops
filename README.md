@@ -30,6 +30,14 @@ Kubernetes namespace and an ArgoCD Application defined in `argocd-apps/`.
 - `kube-system/` - cluster add-ons (coredns, local-path-provisioner,
   metrics-server, nvidia-device-plugin, traefik, headlamp).
 - `tools/` - proxmox-mcp.
+- `argocd-notifications/` - `argocd-notifications-cm` (Gotify + Bark push
+  notifications on ArgoCD sync succeeded/failed, subscribed globally to
+  every Application) plus its SealedSecret. Backed by its own
+  `argocd-notifications` Application.
+- `sealed-secrets-controller/` - the sealed-secrets controller itself
+  (CRD, RBAC, Deployment), installed via the upstream `controller.yaml`
+  release manifest. Backed by its own `sealed-secrets-controller`
+  Application, destination namespace `kube-system`.
 
 ## Shared storage
 
@@ -70,15 +78,44 @@ day.
 
 ## Secrets
 
-Not committed here, must be created out-of-band:
+Real secrets are encrypted with sealed-secrets and committed to Git as
+`SealedSecret` resources - safe to keep in a repo even if it were public,
+since only the in-cluster controller's private key can decrypt them:
 
-- `vpn-stack-secrets` (namespace `media`) - WireGuard private key,
-  referenced by the vpn-stack Deployment's gluetun container.
-- `proxmox-mcp-config` (namespace `tools`) - proxmox-mcp API credentials.
+- `media/sealedsecret.yaml` -> `vpn-stack-secrets` (WireGuard private
+  key, used by the vpn-stack Deployment's gluetun container).
+- `tools/sealedsecret.yaml` -> `proxmox-mcp-config` (proxmox-mcp API
+  credentials).
+- `argocd-notifications/sealedsecret.yaml` -> `argocd-notifications-secret`
+  (Gotify app token, Bark device key).
 
-Consider [sealed-secrets](https://github.com/bitnami-labs/sealed-secrets)
-or [SOPS](https://github.com/getsops/sops) if you want these to live in
-Git safely instead of being applied manually.
+**Disaster recovery - read this before wiping the cluster.** SealedSecrets
+can only be decrypted by the exact controller keypair that sealed them.
+If `sealed-secrets-controller` is ever reinstalled from scratch without
+restoring its original key, every SealedSecret in this repo becomes
+permanently unreadable. The controller's private key is backed up
+outside Git (Kolby has it in a password manager / secure offline location
+as of 2026-07-06) - restore that key into `kube-system` before the
+controller starts on a rebuilt cluster:
+
+    kubectl apply -f sealed-secrets-master-key-BACKUP.yaml
+    kubectl rollout restart deployment sealed-secrets-controller -n kube-system
+
+**Re-sealing / rotating a secret:** fetch the controller's public cert
+with `kubeseal --fetch-cert --controller-namespace kube-system
+--controller-name sealed-secrets-controller > cert.pem`, then pipe a
+plain Secret manifest through `kubeseal --cert cert.pem --format yaml`
+to produce a new SealedSecret and commit it.
+
+**Adopting a pre-existing plain Secret:** if a plain Secret with the same
+name/namespace already exists before you apply its SealedSecret, the
+controller refuses to touch it (error: "failed update: Resource ...
+already exists and is not managed by SealedSecret") and ArgoCD shows the
+owning Application as Degraded. Delete the plain Secret first (data is
+identical, so there's no disruption) and the SealedSecret controller
+recreates it under its own ownership within a few seconds:
+
+    kubectl delete secret <name> -n <namespace>
 
 ## Sync policy
 
