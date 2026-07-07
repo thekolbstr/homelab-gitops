@@ -34,7 +34,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: bark-pvc-longhorn
+          claimName: bark-pvc-rwo
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -60,7 +60,7 @@ spec:
         - name: GOTIFY_DEFAULTUSER_NAME
           value: kolby
         - name: GOTIFY_DEFAULTUSER_PASS
-          value: changeme  # NOTE: only applies on brand-new DB creation; live admin creds were reset via SQL — see chat history.
+          value: changeme  # NOTE: only applies on brand-new DB creation; live admin creds were reset via SQL â€” see chat history.
         image: gotify/server:latest
         name: gotify
         ports:
@@ -78,7 +78,7 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: gotify-pvc-longhorn
+          claimName: gotify-pvc-rwo
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -152,10 +152,10 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: igotify-pvc-longhorn
+          claimName: igotify-pvc-rwo
   # NOTE: iGotify persists GOTIFY_URLS/GOTIFY_CLIENT_TOKENS into its own SQLite DB
   # (/app/data/users.db) on first boot and ignores env var changes afterward.
-  # Changing these values here will NOT reconfigure an already-initialized instance —
+  # Changing these values here will NOT reconfigure an already-initialized instance â€”
   # the DB must be edited directly (see chat history) or the PVC wiped for a fresh start.
 ---
 apiVersion: apps/v1
@@ -212,7 +212,7 @@ spec:
       volumes:
       - name: jellyfin-config
         persistentVolumeClaim:
-          claimName: jellyfin-pvc-longhorn
+          claimName: jellyfin-pvc-rwo
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -361,7 +361,7 @@ spec:
       volumes:
       - name: plex-config
         persistentVolumeClaim:
-          claimName: plex-pvc-longhorn
+          claimName: plex-pvc-rwo
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -407,7 +407,7 @@ spec:
       volumes:
       - name: config
         persistentVolumeClaim:
-          claimName: radarr-pvc-longhorn
+          claimName: radarr-pvc-rwo
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -486,7 +486,7 @@ spec:
       volumes:
       - name: config
         persistentVolumeClaim:
-          claimName: sonarr-pvc-longhorn
+          claimName: sonarr-pvc-rwo
       - name: data
         persistentVolumeClaim:
           claimName: media-data-pvc
@@ -524,7 +524,7 @@ spec:
       volumes:
       - name: tautulli-config
         persistentVolumeClaim:
-          claimName: tautulli-pvc-longhorn
+          claimName: tautulli-pvc-rwo
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -612,7 +612,7 @@ spec:
 # SECURITY WARNING: the live deployment currently has WIREGUARD_PRIVATE_KEY as a
 # plaintext env var. DO NOT commit the real key value to Git. Before importing this
 # to GitOps, move it into a Kubernetes Secret (referenced via envFrom/secretKeyRef)
-# and manage that secret out-of-band (sealed-secrets, SOPS, or your password manager) —
+# and manage that secret out-of-band (sealed-secrets, SOPS, or your password manager) â€”
 # never as plain data in this repo.
 apiVersion: apps/v1
 kind: Deployment

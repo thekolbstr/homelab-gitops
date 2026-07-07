@@ -12,84 +12,6 @@ spec:
   storageClassName: ""
   volumeName: appdata-pv
 ---
-# NOTE: bark-pvc (old storage) retained as backup after migrating bark to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: bark-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: local-path
----
-# NOTE: gotify-pvc (static hostPath, worker node only) is kept here as a
-# retained backup after migrating gotify to Longhorn RWX storage below.
-# Not referenced by any Deployment anymore. Safe to delete once the
-# Longhorn migration has been running reliably for a while.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: gotify-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
-  storageClassName: ""
-  volumeName: gotify-pv
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: gotify-pvc-longhorn
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: longhorn
-  resources:
-    requests:
-      storage: 2Gi
----
-# NOTE: igotify-pvc (old storage) retained as backup after migrating igotify to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: igotify-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  storageClassName: ""
-  volumeName: igotify-pv
----
-# NOTE: jellyfin-config-local-pvc (old storage) retained as backup after migrating jellyfin to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: jellyfin-config-local-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
-  storageClassName: local
-  volumeName: jellyfin-config-local-pv
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -104,76 +26,19 @@ spec:
   storageClassName: ""
   volumeName: media-data-pv
 ---
-# NOTE: plex-config-local-pvc (old storage) retained as backup after migrating plex to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
+# Single-consumer app config volumes migrated from Longhorn RWX (NFS
+# share-manager) to Longhorn RWO (native block/iSCSI). RWX was causing
+# SQLite corruption and "database is busy" write-lock timeouts under
+# these apps' WAL-mode databases. None of these are shared across
+# multiple pods, so RWO is correct and faster.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: plex-config-local-pvc
+  name: bark-pvc-rwo
   namespace: media
 spec:
   accessModes:
   - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Gi
-  storageClassName: local
-  volumeName: plex-config-local-pv
----
-# NOTE: radarr-local-pvc (old storage) retained as backup after migrating radarr to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: radarr-local-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: local
----
-# NOTE: sonarr-local-pvc (old storage) retained as backup after migrating sonarr to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: sonarr-local-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: local
----
-# NOTE: tautulli-config-local-pvc (old storage) retained as backup after migrating tautulli to Longhorn RWX.
-# Not referenced by any Deployment anymore. Safe to delete once confidence is high.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tautulli-config-local-pvc
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: local
-  volumeName: tautulli-config-local-pv
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: bark-pvc-longhorn
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteMany
   storageClassName: longhorn
   resources:
     requests:
@@ -182,64 +47,12 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: igotify-pvc-longhorn
+  name: gotify-pvc-rwo
   namespace: media
 spec:
   accessModes:
-  - ReadWriteMany
+  - ReadWriteOnce
   storageClassName: longhorn
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: jellyfin-pvc-longhorn
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: longhorn-single
-  resources:
-    requests:
-      storage: 6Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: plex-pvc-longhorn
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: longhorn-single
-  resources:
-    requests:
-      storage: 8Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: radarr-pvc-longhorn
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: longhorn
-  resources:
-    requests:
-      storage: 10Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: sonarr-pvc-longhorn
-  namespace: media
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: longhorn-single
   resources:
     requests:
       storage: 2Gi
@@ -247,12 +60,77 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: tautulli-pvc-longhorn
+  name: igotify-pvc-rwo
   namespace: media
 spec:
   accessModes:
-  - ReadWriteMany
-  storageClassName: longhorn-single
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-pvc-rwo
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 6Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-pvc-rwo
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 8Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radarr-pvc-rwo
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-pvc-rwo
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tautulli-pvc-rwo
+  namespace: media
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
   resources:
     requests:
       storage: 2Gi
