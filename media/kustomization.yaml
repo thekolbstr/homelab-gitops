@@ -5,3 +5,4 @@ resources:
   - ingresses.yaml
   - pvc.yaml
   - services.yaml
+  - sealedsecret.yaml
