@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: igotify
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thekolbstr/homelab-gitops.git
+    targetRevision: main
+    path: igotify
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: igotify
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true

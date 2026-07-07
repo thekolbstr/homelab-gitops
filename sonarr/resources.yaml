@@ -1,0 +1,118 @@
+﻿apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-data-pv-sonarr
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 500Gi
+  nfs:
+    path: /volume1/Storage/data
+    server: 192.168.0.183
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-data-pvc
+  namespace: sonarr
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: ""
+  volumeName: media-data-pv-sonarr
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-pvc-rwo
+  namespace: sonarr
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  volumeName: pvc-1eceb39f-2c77-4e55-9c95-3837aa7a0cef
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarr
+  namespace: sonarr
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sonarr
+  template:
+    metadata:
+      labels:
+        app: sonarr
+    spec:
+      containers:
+      - env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: America/New_York
+        image: lscr.io/linuxserver/sonarr:latest
+        name: sonarr
+        ports:
+        - containerPort: 8989
+        volumeMounts:
+        - mountPath: /config
+          name: config
+        - mountPath: /data
+          name: data
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: sonarr-pvc-rwo
+      - name: data
+        persistentVolumeClaim:
+          claimName: media-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sonarr
+  namespace: sonarr
+spec:
+  selector:
+    app: sonarr
+  ports:
+  - port: 8989
+    protocol: TCP
+    targetPort: 8989
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sonarr
+  namespace: sonarr
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: sonarr.home.arpa
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sonarr
+            port:
+              number: 8989

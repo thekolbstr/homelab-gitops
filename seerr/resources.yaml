@@ -1,0 +1,103 @@
+﻿apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: appdata-pv-seerr
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 100Gi
+  mountOptions:
+    - noatime
+    - nodiratime
+    - rsize=131072
+    - wsize=131072
+    - nfsvers=4.1
+    - hard
+    - timeo=600
+    - retrans=2
+  nfs:
+    path: /volume1/Storage/appdata
+    server: 192.168.0.183
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: appdata-pvc
+  namespace: seerr
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: ""
+  volumeName: appdata-pv-seerr
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seerr
+  namespace: seerr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: seerr
+  template:
+    metadata:
+      labels:
+        app: seerr
+    spec:
+      containers:
+      - env:
+        - name: TZ
+          value: America/New_York
+        image: ghcr.io/seerr-team/seerr:latest
+        name: seerr
+        ports:
+        - containerPort: 5055
+        volumeMounts:
+        - mountPath: /app/config
+          name: appdata
+          subPath: seerr
+      volumes:
+      - name: appdata
+        persistentVolumeClaim:
+          claimName: appdata-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seerr
+  namespace: seerr
+spec:
+  type: ClusterIP
+  selector:
+    app: seerr
+  ports:
+  - port: 5055
+    targetPort: 5055
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seerr
+  namespace: seerr
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: seerr.home.arpa
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: seerr
+            port:
+              number: 5055

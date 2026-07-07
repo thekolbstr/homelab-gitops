@@ -1,0 +1,142 @@
+﻿apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: media-data-pv-jellyfin
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 500Gi
+  nfs:
+    path: /volume1/Storage/data
+    server: 192.168.0.183
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-data-pvc
+  namespace: jellyfin
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
+  storageClassName: ""
+  volumeName: media-data-pv-jellyfin
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-pvc-rwo
+  namespace: jellyfin
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  volumeName: pvc-9f1fbef2-8e14-4761-8d60-f091c4bef43b
+  resources:
+    requests:
+      storage: 6Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: gpu
+                operator: In
+                values:
+                - rtx3060
+                - teslap4
+      runtimeClassName: nvidia
+      containers:
+      - env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        - name: TZ
+          value: America/New_York
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: compute,video,utility
+        - name: JELLYFIN_PublishedServerUrl
+          value: http://192.168.0.195:8096
+        image: lscr.io/linuxserver/jellyfin:latest
+        name: jellyfin
+        ports:
+        - containerPort: 8096
+        volumeMounts:
+        - mountPath: /config
+          name: jellyfin-config
+        - mountPath: /data
+          name: data
+        - mountPath: /config/transcodes
+          name: transcode
+      volumes:
+      - name: jellyfin-config
+        persistentVolumeClaim:
+          claimName: jellyfin-pvc-rwo
+      - name: data
+        persistentVolumeClaim:
+          claimName: media-data-pvc
+      - name: transcode
+        emptyDir:
+          medium: Memory
+          sizeLimit: 4Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+spec:
+  type: NodePort
+  selector:
+    app: jellyfin
+  ports:
+  - port: 8096
+    targetPort: 8096
+    nodePort: 30096
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: jellyfin.home.arpa
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: jellyfin
+            port:
+              number: 8096
