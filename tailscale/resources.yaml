@@ -49,7 +49,7 @@ spec:
         - name: TS_ROUTES
           value: "192.168.0.0/24"
         - name: TS_EXTRA_ARGS
-          value: "--advertise-routes=192.168.0.0/24 --accept-dns=false"
+          value: "--accept-dns=false"
         - name: TS_HOSTNAME
           value: "k3s-subnet-router"
         - name: TS_STATE_DIR
