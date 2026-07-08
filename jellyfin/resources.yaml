@@ -1,10 +1,10 @@
-﻿apiVersion: v1
+apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: media-data-pv-jellyfin
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   capacity:
     storage: 500Gi
   nfs:
@@ -20,7 +20,7 @@ metadata:
   namespace: jellyfin
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   resources:
     requests:
       storage: 500Gi
@@ -34,7 +34,7 @@ metadata:
   namespace: jellyfin
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   storageClassName: longhorn
   volumeName: pvc-9f1fbef2-8e14-4761-8d60-f091c4bef43b
   resources:
@@ -94,6 +94,18 @@ spec:
           name: data
         - mountPath: /config/transcodes
           name: transcode
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8096
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8096
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: jellyfin-config
         persistentVolumeClaim:
@@ -140,3 +152,14 @@ spec:
             name: jellyfin
             port:
               number: 8096
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: jellyfin

@@ -53,6 +53,18 @@ spec:
         - mountPath: /etc/alertmanager/alertmanager.yml
           name: config
           subPath: alertmanager.yml
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - configMap:
           name: alertmanager-config
@@ -105,6 +117,16 @@ spec:
         - mountPath: /etc/alertmanager-ntfy/config.yml
           name: config
           subPath: config.yml
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 20
       - args:
         - --configs=/etc/alertmanager-ntfy/config-media.yml
         image: ghcr.io/alexbakker/alertmanager-ntfy:latest
@@ -124,6 +146,16 @@ spec:
         - mountPath: /etc/alertmanager-ntfy/config-media.yml
           name: config
           subPath: config-media.yml
+        readinessProbe:
+          tcpSocket:
+            port: 8001
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - configMap:
           name: alertmanager-ntfy-config
@@ -170,6 +202,18 @@ spec:
         - mountPath: /etc/blackbox/blackbox.yml
           name: config
           subPath: blackbox.yml
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9115
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9115
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - configMap:
           name: blackbox-config
@@ -228,6 +272,16 @@ spec:
         - mountPath: /app/server.py
           name: script
           subPath: server.py
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - configMap:
           name: gotify-alertmanager-script
@@ -269,6 +323,18 @@ spec:
           requests:
             cpu: 50m
             memory: 64Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -345,6 +411,18 @@ spec:
           subPath: rules.yml
         - mountPath: /prometheus
           name: data
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - configMap:
           name: prometheus-config
@@ -361,3 +439,69 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: prometheus-pvc-longhorn
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: alertmanager-ntfy
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: alertmanager-ntfy
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: blackbox-exporter
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: blackbox-exporter
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gotify-alertmanager
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: gotify-alertmanager
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kube-state-metrics
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: kube-state-metrics
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: prometheus
