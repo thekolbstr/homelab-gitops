@@ -55,6 +55,8 @@ spec:
       - env:
         - name: TZ
           value: America/New_York
+        - name: HOMEPAGE_ALLOWED_HOSTS
+          value: '*'
         image: ghcr.io/gethomepage/homepage:latest
         name: homepage
         ports:
