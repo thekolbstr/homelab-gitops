@@ -1,11 +1,11 @@
-﻿apiVersion: v1
+apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: igotify-pvc-rwo
   namespace: igotify
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   storageClassName: longhorn
   volumeName: pvc-933a68f4-0436-4638-98b8-ebe7ace0f6f0
   resources:
@@ -51,6 +51,16 @@ spec:
         volumeMounts:
         - mountPath: /app/data
           name: data
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -90,3 +100,14 @@ spec:
             name: igotify
             port:
               number: 8080
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: igotify
+  namespace: igotify
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: igotify

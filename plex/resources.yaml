@@ -4,7 +4,7 @@ metadata:
   name: media-data-pv-plex
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   capacity:
     storage: 500Gi
   nfs:
@@ -20,7 +20,7 @@ metadata:
   namespace: plex
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   resources:
     requests:
       storage: 500Gi
@@ -34,7 +34,7 @@ metadata:
   namespace: plex
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   storageClassName: longhorn
   volumeName: pvc-d3c6f5cf-a04d-4e86-9346-0b8c70ea425b
   resources:
@@ -96,6 +96,18 @@ spec:
           name: data
         - mountPath: /transcode
           name: transcode
+        readinessProbe:
+          httpGet:
+            path: /identity
+            port: 32400
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /identity
+            port: 32400
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: plex-config
         persistentVolumeClaim:
@@ -141,3 +153,14 @@ spec:
             name: plex
             port:
               number: 32400
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: plex
+  namespace: plex
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: plex

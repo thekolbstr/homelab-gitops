@@ -1,10 +1,10 @@
-﻿apiVersion: v1
+apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: media-data-pv-radarr
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   capacity:
     storage: 500Gi
   nfs:
@@ -20,7 +20,7 @@ metadata:
   namespace: radarr
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   resources:
     requests:
       storage: 500Gi
@@ -34,7 +34,7 @@ metadata:
   namespace: radarr
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   storageClassName: longhorn
   volumeName: pvc-1d6bb3c0-5888-4898-8e03-16e7deb84a96
   resources:
@@ -75,6 +75,18 @@ spec:
           name: config
         - mountPath: /data
           name: data
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 7878
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 7878
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: config
         persistentVolumeClaim:
@@ -117,3 +129,14 @@ spec:
             name: radarr
             port:
               number: 7878
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: radarr
+  namespace: radarr
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: radarr

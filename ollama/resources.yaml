@@ -1,21 +1,21 @@
-﻿apiVersion: v1
+apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: appdata-pv-ollama
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   capacity:
     storage: 100Gi
   mountOptions:
-    - noatime
-    - nodiratime
-    - rsize=131072
-    - wsize=131072
-    - nfsvers=4.1
-    - hard
-    - timeo=600
-    - retrans=2
+  - noatime
+  - nodiratime
+  - rsize=131072
+  - wsize=131072
+  - nfsvers=4.1
+  - hard
+  - timeo=600
+  - retrans=2
   nfs:
     path: /volume1/Storage/appdata
     server: 192.168.0.183
@@ -29,7 +29,7 @@ metadata:
   namespace: ollama
 spec:
   accessModes:
-    - ReadWriteMany
+  - ReadWriteMany
   resources:
     requests:
       storage: 100Gi
@@ -80,6 +80,18 @@ spec:
         - mountPath: /models
           name: appdata
           subPath: ollama-models
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 11434
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: appdata
         persistentVolumeClaim:
@@ -118,3 +130,14 @@ spec:
             name: ollama
             port:
               number: 11434
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ollama
+  namespace: ollama
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: ollama

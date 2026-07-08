@@ -56,6 +56,16 @@ spec:
           subPath: dispatcharr
         - mountPath: /data/db
           name: dispatcharr-db
+        readinessProbe:
+          tcpSocket:
+            port: 9191
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 9191
+          initialDelaySeconds: 30
+          periodSeconds: 20
       - name: sabnzbd
         image: lscr.io/linuxserver/sabnzbd:latest
         env:
@@ -73,6 +83,18 @@ spec:
           subPath: sabnzbd
         - mountPath: /data
           name: data
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
       - name: qbittorrent
         image: lscr.io/linuxserver/qbittorrent:latest
         env:
@@ -95,6 +117,16 @@ spec:
           subPath: qbittorrent
         - mountPath: /data
           name: data
+        readinessProbe:
+          tcpSocket:
+            port: 8090
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 20
       - name: prowlarr
         image: lscr.io/linuxserver/prowlarr:latest
         env:
@@ -110,6 +142,18 @@ spec:
         - mountPath: /config
           name: appdata
           subPath: prowlarr
+        readinessProbe:
+          httpGet:
+            path: /ping
+            port: 9696
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /ping
+            port: 9696
+          initialDelaySeconds: 30
+          periodSeconds: 20
       - name: byparr
         image: ghcr.io/thephaseless/byparr:latest
         env:
@@ -119,6 +163,16 @@ spec:
           value: America/New_York
         ports:
         - containerPort: 8191
+        readinessProbe:
+          tcpSocket:
+            port: 8191
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          tcpSocket:
+            port: 8191
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: tun
         hostPath:
@@ -132,3 +186,14 @@ spec:
       - name: dispatcharr-db
         persistentVolumeClaim:
           claimName: dispatcharr-db-pvc
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vpn-stack
+  namespace: media
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vpn-stack

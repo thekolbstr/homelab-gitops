@@ -1,4 +1,4 @@
-﻿apiVersion: apps/v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bark
@@ -33,6 +33,18 @@ spec:
         volumeMounts:
         - mountPath: /data
           name: data
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -82,3 +94,14 @@ spec:
             name: bark
             port:
               number: 8080
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bark
+  namespace: bark
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: bark

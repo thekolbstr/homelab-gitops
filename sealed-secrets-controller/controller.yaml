@@ -1,4 +1,3 @@
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -88,8 +87,7 @@ spec:
             description: SealedSecretSpec is the specification of a SealedSecret.
             properties:
               data:
-                description: Data is deprecated and will be removed eventually. Use
-                  per-value EncryptedData instead.
+                description: Data is deprecated and will be removed eventually. Use per-value EncryptedData instead.
                 format: byte
                 type: string
               encryptedData:
@@ -140,27 +138,22 @@ spec:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   type:
-                    description: Used to facilitate programmatic handling of secret
-                      data.
+                    description: Used to facilitate programmatic handling of secret data.
                     type: string
                 type: object
             required:
             - encryptedData
             type: object
           status:
-            description: SealedSecretStatus is the most recently observed status of
-              the SealedSecret.
+            description: SealedSecretStatus is the most recently observed status of the SealedSecret.
             properties:
               conditions:
-                description: Represents the latest available observations of a sealed
-                  secret's current state.
+                description: Represents the latest available observations of a sealed secret's current state.
                 items:
-                  description: SealedSecretCondition describes the state of a sealed
-                    secret at a certain point.
+                  description: SealedSecretCondition describes the state of a sealed secret at a certain point.
                   properties:
                     lastTransitionTime:
-                      description: Last time the condition transitioned from one status
-                        to another.
+                      description: Last time the condition transitioned from one status to another.
                       format: date-time
                       type: string
                     lastUpdateTime:
@@ -168,8 +161,7 @@ spec:
                       format: date-time
                       type: string
                     message:
-                      description: A human readable message indicating details about
-                        the transition.
+                      description: A human readable message indicating details about the transition.
                       type: string
                     reason:
                       description: The reason for the condition's last transition.
@@ -190,8 +182,7 @@ spec:
                   type: object
                 type: array
               observedGeneration:
-                description: ObservedGeneration reflects the generation most recently
-                  observed by the sealed-secrets controller.
+                description: ObservedGeneration reflects the generation most recently observed by the sealed-secrets controller.
                 format: int64
                 type: integer
             type: object
@@ -411,3 +402,14 @@ subjects:
 - apiGroup: rbac.authorization.k8s.io
   kind: Group
   name: system:authenticated
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sealed-secrets-controller
+  namespace: kube-system
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      name: sealed-secrets-controller
