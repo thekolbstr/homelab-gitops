@@ -126,12 +126,14 @@ metadata:
   name: plex
   namespace: plex
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: plex
   ports:
   - port: 32400
     targetPort: 32400
+    nodePort: 32400
+    protocol: TCP
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
