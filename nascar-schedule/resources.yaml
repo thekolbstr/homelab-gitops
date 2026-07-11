@@ -121,14 +121,14 @@ data:
         entry = {
             "series_id": series_id,
             "flag_state": flag_state,
-            "lap_number": data.get("lap_number", 0),
+            "lap_number": data.get("lap_number", 0) + 1,
             "laps_in_race": data.get("laps_in_race", 0),
             "laps_to_go": data.get("laps_to_go", 0),
             "run_name": data.get("run_name", ""),
             "track_name": data.get("track_name", ""),
         }
 
-        is_live = flag_state in (1, 2, 3, 4) and len(vehicles) > 0
+        is_live = flag_state in (1, 2, 3, 4, 5) and len(vehicles) > 0
         entry["is_live"] = is_live
 
         drivers = []
@@ -276,3 +276,4 @@ spec:
     - port: 8002
       targetPort: 8002
       nodePort: 30802
+
