@@ -58,8 +58,6 @@ spec:
       labels:
         app: plex
     spec:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
