@@ -76,6 +76,7 @@ spec:
             - tailscale status --json | grep -q '"BackendState":"Running"'
           initialDelaySeconds: 10
           periodSeconds: 15
+          timeoutSeconds: 5
         livenessProbe:
           exec:
             command:
@@ -84,6 +85,7 @@ spec:
             - tailscale status --json | grep -q '"BackendState":"Running"'
           initialDelaySeconds: 30
           periodSeconds: 30
+          timeoutSeconds: 5
       volumes:
       - name: dev-net-tun
         hostPath:
