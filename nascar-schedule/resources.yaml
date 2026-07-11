@@ -1,4 +1,4 @@
-﻿apiVersion: v1
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nascar-schedule-script
@@ -7,11 +7,15 @@ data:
   nascar_schedule_server.py: |
     #!/usr/bin/env python3
     """
-    NASCAR schedule helper server
-    ------------------------------
-    Fetches NASCAR''s full season schedule, computes per-series candidate/next
+    NASCAR schedule + live helper server
+    ------------------------------------
+    Fetches NASCAR's full season schedule, computes per-series candidate/next
     race info, and serves a tiny JSON summary over plain HTTP for the ESP32
-    to poll instead of hitting cf.nascar.com''s large schedule file directly.
+    to poll instead of hitting cf.nascar.com's large schedule file directly.
+
+    Also polls each series' live-feed endpoint every 15s and serves a
+    distilled /live.json - the ESP32 hit the same large-payload TLS problem
+    fetching live-feed.json directly, so that's offloaded here too.
     """
     import json
     import threading
@@ -22,10 +26,16 @@ data:
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
     PORT = 8002
-    REFRESH_SECONDS = 30 * 60
+    SCHEDULE_REFRESH_SECONDS = 30 * 60
+    LIVE_REFRESH_SECONDS = 15
 
-    _cache_lock = threading.Lock()
-    _cache = {"generated_at": 0, "series": []}
+    _schedule_lock = threading.Lock()
+    _schedule_cache = {"generated_at": 0, "series": []}
+
+    _live_lock = threading.Lock()
+    _live_cache = {"generated_at": 0, "series": []}
+
+    UA_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
     def parse_iso_utc(date_str):
@@ -36,14 +46,17 @@ data:
             return None
 
 
+    def http_get_json(url, timeout=30):
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers=UA_HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+
     def fetch_schedule():
         year = datetime.now(timezone.utc).year
         url = f"https://cf.nascar.com/cacher/{year}/race_list_basic.json"
-
-        ctx = ssl.create_default_context()
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        data = http_get_json(url)
 
         now = datetime.now(timezone.utc)
         series_out = []
@@ -92,30 +105,106 @@ data:
         return {"generated_at": int(now.timestamp()), "series": series_out}
 
 
-    def refresh_loop():
+    def fetch_live_for_series(series_id, race_id):
+        url = f"https://cf.nascar.com/cacher/live/series_{series_id}/{race_id}/live-feed.json"
+        data = http_get_json(url, timeout=15)
+
+        flag_state = data.get("flag_state", 0)
+        vehicles = data.get("vehicles", []) or []
+
+        entry = {
+            "series_id": series_id,
+            "flag_state": flag_state,
+            "lap_number": data.get("lap_number", 0),
+            "laps_in_race": data.get("laps_in_race", 0),
+            "laps_to_go": data.get("laps_to_go", 0),
+            "run_name": data.get("run_name", ""),
+            "track_name": data.get("track_name", ""),
+        }
+
+        is_live = flag_state in (1, 2, 3, 4) and len(vehicles) > 0
+        entry["is_live"] = is_live
+
+        drivers = []
+        if is_live:
+            for v in vehicles:
+                driver = v.get("driver") or {}
+                drivers.append({
+                    "position": v.get("running_position", 0),
+                    "number": str(v.get("vehicle_number", "")),
+                    "name": driver.get("full_name", ""),
+                    "on_track": bool(v.get("is_on_track", True)),
+                })
+            drivers.sort(key=lambda d: d["position"])
+
+        entry["drivers"] = drivers
+        return entry
+
+
+    def schedule_refresh_loop():
         while True:
             try:
                 result = fetch_schedule()
-                with _cache_lock:
-                    _cache.clear()
-                    _cache.update(result)
+                with _schedule_lock:
+                    _schedule_cache.clear()
+                    _schedule_cache.update(result)
                 print(f"[{datetime.now()}] Schedule refreshed OK: "
                       f"{[ (s['series_id'], s.get('candidate_race_id')) for s in result['series'] ]}")
             except Exception as e:
                 print(f"[{datetime.now()}] Schedule refresh FAILED: {e}")
-            time.sleep(REFRESH_SECONDS)
+            time.sleep(SCHEDULE_REFRESH_SECONDS)
+
+
+    def live_refresh_loop():
+        while True:
+            try:
+                with _schedule_lock:
+                    candidates = [
+                        (s["series_id"], s.get("candidate_race_id"))
+                        for s in _schedule_cache.get("series", [])
+                        if s.get("candidate_race_id")
+                    ]
+
+                series_out = []
+                for series_id, race_id in candidates:
+                    try:
+                        series_out.append(fetch_live_for_series(series_id, race_id))
+                    except Exception as e:
+                        print(f"[{datetime.now()}] Live fetch FAILED for series {series_id} "
+                              f"race {race_id}: {e}")
+                        series_out.append({"series_id": series_id, "is_live": False, "drivers": []})
+
+                with _live_lock:
+                    _live_cache.clear()
+                    _live_cache.update({
+                        "generated_at": int(datetime.now(timezone.utc).timestamp()),
+                        "series": series_out,
+                    })
+
+                print(f"[{datetime.now()}] Live refreshed: "
+                      f"{[ (s['series_id'], s.get('is_live'), s.get('flag_state')) for s in series_out ]}")
+            except Exception as e:
+                print(f"[{datetime.now()}] Live refresh loop error: {e}")
+            time.sleep(LIVE_REFRESH_SECONDS)
 
 
     class Handler(BaseHTTPRequestHandler):
+        def _send_json(self, obj):
+            body = json.dumps(obj).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self):
-            if self.path.rstrip("/") in ("", "/schedule.json"):
-                with _cache_lock:
-                    body = json.dumps(_cache).encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+            path = self.path.rstrip("/")
+            if path in ("", "/schedule.json"):
+                with _schedule_lock:
+                    self._send_json(dict(_schedule_cache))
+            elif path == "/live.json":
+                with _live_lock:
+                    self._send_json(dict(_live_cache))
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -127,15 +216,16 @@ data:
     if __name__ == "__main__":
         print("Doing initial schedule fetch...")
         try:
-            with _cache_lock:
-                _cache.update(fetch_schedule())
-            print("Initial fetch OK.")
+            with _schedule_lock:
+                _schedule_cache.update(fetch_schedule())
+            print("Initial schedule fetch OK.")
         except Exception as e:
-            print(f"Initial fetch failed (will retry in background): {e}")
+            print(f"Initial schedule fetch failed (will retry in background): {e}")
 
-        threading.Thread(target=refresh_loop, daemon=True).start()
+        threading.Thread(target=schedule_refresh_loop, daemon=True).start()
+        threading.Thread(target=live_refresh_loop, daemon=True).start()
 
-        print(f"Serving schedule.json on http://0.0.0.0:{PORT}/schedule.json")
+        print(f"Serving schedule.json + live.json on http://0.0.0.0:{PORT}/")
         HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 ---
 apiVersion: apps/v1
