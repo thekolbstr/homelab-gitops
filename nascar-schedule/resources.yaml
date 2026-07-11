@@ -33,7 +33,7 @@ data:
 
     PORT = 8002
     SCHEDULE_REFRESH_SECONDS = 30 * 60
-    LIVE_REFRESH_SECONDS = 15
+    LIVE_REFRESH_SECONDS = 5
 
     _schedule_lock = threading.Lock()
     _schedule_cache = {"generated_at": 0, "series": []}
