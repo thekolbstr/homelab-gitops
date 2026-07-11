@@ -1,0 +1,182 @@
+﻿apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nascar-schedule-script
+  namespace: nascar-schedule
+data:
+  nascar_schedule_server.py: |
+    #!/usr/bin/env python3
+    """
+    NASCAR schedule helper server
+    ------------------------------
+    Fetches NASCAR''s full season schedule, computes per-series candidate/next
+    race info, and serves a tiny JSON summary over plain HTTP for the ESP32
+    to poll instead of hitting cf.nascar.com''s large schedule file directly.
+    """
+    import json
+    import threading
+    import time
+    import urllib.request
+    import ssl
+    from datetime import datetime, timezone
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    PORT = 8002
+    REFRESH_SECONDS = 30 * 60
+
+    _cache_lock = threading.Lock()
+    _cache = {"generated_at": 0, "series": []}
+
+
+    def parse_iso_utc(date_str):
+        try:
+            dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
+            return dt.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            return None
+
+
+    def fetch_schedule():
+        year = datetime.now(timezone.utc).year
+        url = f"https://cf.nascar.com/cacher/{year}/race_list_basic.json"
+
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        now = datetime.now(timezone.utc)
+        series_out = []
+
+        for series_id, key in ((1, "series_1"), (2, "series_2"), (3, "series_3")):
+            races = data.get(key, [])
+
+            candidate = None
+            upcoming = None
+
+            for r in races:
+                race_date = parse_iso_utc(r.get("race_date", ""))
+                if race_date is None:
+                    continue
+
+                if race_date <= now:
+                    if candidate is None or race_date > candidate["_date"]:
+                        candidate = {
+                            "race_id": r.get("race_id"),
+                            "race_name": r.get("race_name", ""),
+                            "track_name": r.get("track_name", ""),
+                            "_date": race_date,
+                        }
+                else:
+                    if upcoming is None or race_date < upcoming["_date"]:
+                        upcoming = {
+                            "race_name": r.get("race_name", ""),
+                            "track_name": r.get("track_name", ""),
+                            "_date": race_date,
+                        }
+
+            entry = {"series_id": series_id}
+
+            if candidate:
+                entry["candidate_race_id"] = candidate["race_id"]
+                entry["candidate_race_name"] = candidate["race_name"]
+                entry["candidate_track_name"] = candidate["track_name"]
+
+            if upcoming:
+                entry["next_race_name"] = upcoming["race_name"]
+                entry["next_track_name"] = upcoming["track_name"]
+                entry["next_seconds_until"] = int((upcoming["_date"] - now).total_seconds())
+
+            series_out.append(entry)
+
+        return {"generated_at": int(now.timestamp()), "series": series_out}
+
+
+    def refresh_loop():
+        while True:
+            try:
+                result = fetch_schedule()
+                with _cache_lock:
+                    _cache.clear()
+                    _cache.update(result)
+                print(f"[{datetime.now()}] Schedule refreshed OK: "
+                      f"{[ (s['series_id'], s.get('candidate_race_id')) for s in result['series'] ]}")
+            except Exception as e:
+                print(f"[{datetime.now()}] Schedule refresh FAILED: {e}")
+            time.sleep(REFRESH_SECONDS)
+
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path.rstrip("/") in ("", "/schedule.json"):
+                with _cache_lock:
+                    body = json.dumps(_cache).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, format, *args):
+            pass
+
+
+    if __name__ == "__main__":
+        print("Doing initial schedule fetch...")
+        try:
+            with _cache_lock:
+                _cache.update(fetch_schedule())
+            print("Initial fetch OK.")
+        except Exception as e:
+            print(f"Initial fetch failed (will retry in background): {e}")
+
+        threading.Thread(target=refresh_loop, daemon=True).start()
+
+        print(f"Serving schedule.json on http://0.0.0.0:{PORT}/schedule.json")
+        HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nascar-schedule
+  namespace: nascar-schedule
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nascar-schedule
+  template:
+    metadata:
+      labels:
+        app: nascar-schedule
+    spec:
+      containers:
+        - name: nascar-schedule
+          image: python:3.11-slim
+          command: ["python3", "/app/nascar_schedule_server.py"]
+          ports:
+            - containerPort: 8002
+          volumeMounts:
+            - name: script
+              mountPath: /app
+      volumes:
+        - name: script
+          configMap:
+            name: nascar-schedule-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nascar-schedule
+  namespace: nascar-schedule
+spec:
+  type: NodePort
+  selector:
+    app: nascar-schedule
+  ports:
+    - port: 8002
+      targetPort: 8002
+      nodePort: 30802
