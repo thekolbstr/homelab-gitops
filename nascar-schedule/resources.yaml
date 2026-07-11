@@ -16,6 +16,9 @@ data:
     Also polls each series' live-feed endpoint every 15s and serves a
     distilled /live.json - the ESP32 hit the same large-payload TLS problem
     fetching live-feed.json directly, so that's offloaded here too.
+
+    NOTE: NASCAR's race_date strings have no timezone suffix but are actually
+    Eastern local time (EST/EDT), not UTC.
     """
     import json
     import threading
@@ -23,7 +26,10 @@ data:
     import urllib.request
     import ssl
     from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
     from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    EASTERN = ZoneInfo("America/New_York")
 
     PORT = 8002
     SCHEDULE_REFRESH_SECONDS = 30 * 60
@@ -41,7 +47,7 @@ data:
     def parse_iso_utc(date_str):
         try:
             dt = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
-            return dt.replace(tzinfo=timezone.utc)
+            return dt.replace(tzinfo=EASTERN)
         except (ValueError, TypeError):
             return None
 
@@ -246,7 +252,7 @@ spec:
       containers:
         - name: nascar-schedule
           image: python:3.11-slim
-          command: ["python3", "/app/nascar_schedule_server.py"]
+          command: ["sh", "-c", "pip install --quiet --no-cache-dir tzdata && python3 /app/nascar_schedule_server.py"]
           ports:
             - containerPort: 8002
           volumeMounts:
