@@ -34,9 +34,9 @@ spec:
       containers:
       - env:
         - name: GOTIFY_URLS
-          value: http://gotify.fullsendbud.xyz
+          value: https://gotify.fullsendbud.xyz
         - name: GOTIFY_CLIENT_TOKENS
-          value: CpqqIlawE8W1T4S
+          value: gtfyc.xLDnBWyREx-yfE6-pY2vUCL1ruVurXx9MbgsS1txTcM
         image: ghcr.io/androidseb25/igotify-notification-assist:latest
         name: igotify
         ports:
