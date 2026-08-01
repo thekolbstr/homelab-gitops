@@ -20,6 +20,7 @@ spec:
   accessModes:
   - ReadWriteMany
   storageClassName: longhorn
+  volumeName: proxmox-mcp-vol-restored
   resources:
     requests:
       storage: 1Gi
