@@ -7,37 +7,80 @@ Kubernetes namespace and an ArgoCD Application defined in `argocd-apps/`.
 ## Structure
 
 - `argocd-apps/` - ArgoCD Application manifests, one per app namespace
-  (bark, gotify, homepage, igotify, jellyfin, ollama, open-webui, plex,
-  radarr, seerr, sonarr, tautulli, tdarr). Each Application has
-  `automated.selfHeal: true` and `automated.prune: false`. These
-  Application objects themselves are applied directly via `kubectl apply`
-  (not bootstrapped via an app-of-apps pattern), so if you ever rebuild
-  ArgoCD from scratch, re-apply everything in this directory.
+(bark, gotify, homepage, igotify, jellyfin, ollama, open-webui, plex,
+radarr, seerr, sonarr, tautulli, tdarr). Each Application has
+`automated.selfHeal: true` and `automated.prune: false`. These
+Application objects themselves are applied directly via `kubectl apply`
+(not bootstrapped via an app-of-apps pattern), so if you ever rebuild
+ArgoCD from scratch, re-apply everything in this directory.
 - `bark/`, `gotify/`, `igotify/`, `tautulli/`, `jellyfin/`, `radarr/`,
-  `sonarr/`, `plex/`, `homepage/`, `ollama/`, `open-webui/`, `seerr/`,
-  `tdarr/` - one namespace per app, each containing its Deployment,
-  Service, Ingress, and PVC(s) in `resources.yaml`.
+`sonarr/`, `plex/`, `homepage/`, `ollama/`, `open-webui/`, `seerr/`,
+`tdarr/` - one namespace per app, each containing its Deployment,
+Service, Ingress, and PVC(s) in `resources.yaml`.
 - `media/` - only vpn-stack now (gluetun + dispatcharr + sabnzbd +
-  qbittorrent + prowlarr + byparr sharing one pod, since they route
-  through gluetun's network namespace for VPN tunneling - this can't be
-  split into separate pods/namespaces without breaking that routing),
-  plus the shared `appdata-pvc` / `media-data-pvc` claims vpn-stack still
-  needs and `dispatcharr-db-pvc`.
+qbittorrent + prowlarr + byparr sharing one pod, since they route
+through gluetun's network namespace for VPN tunneling - this can't be
+split into separate pods/namespaces without breaking that routing),
+plus the shared `appdata-pvc` / `media-data-pvc` claims vpn-stack still
+needs and `dispatcharr-db-pvc`.
 - `monitoring/` - Prometheus, Alertmanager, kube-state-metrics,
-  node-exporter, blackbox-exporter.
+node-exporter, blackbox-exporter.
 - `cert-manager/` - managed via Helm chart in ArgoCD rather than static
-  YAML; see that directory for details.
+YAML; see that directory for details.
 - `kube-system/` - cluster add-ons (coredns, local-path-provisioner,
-  metrics-server, nvidia-device-plugin, traefik, headlamp).
+metrics-server, nvidia-device-plugin, traefik, headlamp).
 - `tools/` - proxmox-mcp.
 - `argocd-notifications/` - `argocd-notifications-cm` (Gotify + Bark push
-  notifications on ArgoCD sync succeeded/failed, subscribed globally to
-  every Application) plus its SealedSecret. Backed by its own
-  `argocd-notifications` Application.
+notifications on ArgoCD sync succeeded/failed, subscribed globally to
+every Application) plus its SealedSecret. Backed by its own
+`argocd-notifications` Application.
 - `sealed-secrets-controller/` - the sealed-secrets controller itself
-  (CRD, RBAC, Deployment), installed via the upstream `controller.yaml`
-  release manifest. Backed by its own `sealed-secrets-controller`
-  Application, destination namespace `kube-system`.
+(CRD, RBAC, Deployment), installed via the upstream `controller.yaml`
+release manifest. Backed by its own `sealed-secrets-controller`
+Application, destination namespace `kube-system`.
+
+## Longhorn
+
+Longhorn itself (the `longhorn-system` namespace) is installed via Helm
+directly against the cluster and is **not** GitOps-managed - there's no
+values file for it in this repo. `kube-system/longhorn-ingress.yaml` and
+`kube-system/longhorn-single-storageclass.yaml` are the only
+git-tracked pieces (UI ingress + a second storage class).
+
+**All 3 nodes must run Longhorn's DaemonSets for volumes to get their
+full replica count.** The cluster is `kubernetes` + `worker` (plain
+nodes) plus `fullsendtherebud` (control-plane/etcd, tainted
+`node-role.kubernetes.io/control-plane:NoSchedule`). Longhorn ships a
+`taint-toleration` Setting meant to auto-tolerate that taint on its own
+system components, but in practice it can silently sit at
+`status.applied: false` and never actually get pushed to the
+`longhorn-manager`, `longhorn-csi-plugin`, and `engine-image-*`
+DaemonSets - leaving the control-plane node permanently excluded from
+storage (`kubectl get nodes.longhorn.io -n longhorn-system` only shows
+2 of 3 nodes) and every volume stuck `degraded` at 2/3 replicas instead
+of the requested 3.
+
+If this happens again after a rebuild, patch the toleration onto the
+DaemonSets directly rather than waiting on the Setting:
+
+kubectl -n longhorn-system patch daemonset longhorn-manager --type strategic -p \
+  '{"spec":{"template":{"spec":{"tolerations":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]}}}}'
+kubectl -n longhorn-system patch daemonset longhorn-csi-plugin --type strategic -p \
+  '{"spec":{"template":{"spec":{"tolerations":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]}}}}'
+kubectl -n longhorn-system patch daemonset engine-image-ei-a4d05f02 --type strategic -p \
+  '{"spec":{"template":{"spec":{"tolerations":[{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]}}}}'
+
+(The `engine-image-*` DaemonSet name has a version-specific suffix -
+check `kubectl get ds -n longhorn-system` for the current name.) After
+patching, `fullsendtherebud` should register as a Longhorn node within
+a minute, and existing degraded volumes will automatically rebuild
+their missing replica onto it once its instance-manager pod is up
+(first-time image pull can take a few minutes).
+
+Also note: `fullsendtherebud` has intermittent `NodeNotReady` flakiness
+(kubelet stops posting node status) unrelated to Longhorn - if replica
+rebuilds onto it seem stuck, check `kubectl get node fullsendtherebud`
+first before assuming it's a Longhorn scheduling problem.
 
 ## Shared storage
 
@@ -83,11 +126,11 @@ Real secrets are encrypted with sealed-secrets and committed to Git as
 since only the in-cluster controller's private key can decrypt them:
 
 - `media/sealedsecret.yaml` -> `vpn-stack-secrets` (WireGuard private
-  key, used by the vpn-stack Deployment's gluetun container).
+key, used by the vpn-stack Deployment's gluetun container).
 - `tools/sealedsecret.yaml` -> `proxmox-mcp-config` (proxmox-mcp API
-  credentials).
+credentials).
 - `argocd-notifications/sealedsecret.yaml` -> `argocd-notifications-secret`
-  (Gotify app token, Bark device key).
+(Gotify app token, Bark device key).
 
 **Disaster recovery - read this before wiping the cluster.** SealedSecrets
 can only be decrypted by the exact controller keypair that sealed them.
@@ -98,8 +141,8 @@ outside Git (Kolby has it in a password manager / secure offline location
 as of 2026-07-06) - restore that key into `kube-system` before the
 controller starts on a rebuilt cluster:
 
-    kubectl apply -f sealed-secrets-master-key-BACKUP.yaml
-    kubectl rollout restart deployment sealed-secrets-controller -n kube-system
+kubectl apply -f sealed-secrets-master-key-BACKUP.yaml
+kubectl rollout restart deployment sealed-secrets-controller -n kube-system
 
 **Re-sealing / rotating a secret:** fetch the controller's public cert
 with `kubeseal --fetch-cert --controller-namespace kube-system
@@ -115,7 +158,7 @@ owning Application as Degraded. Delete the plain Secret first (data is
 identical, so there's no disruption) and the SealedSecret controller
 recreates it under its own ownership within a few seconds:
 
-    kubectl delete secret <name> -n <namespace>
+kubectl delete secret <name> -n <namespace>
 
 ## Sync policy
 
