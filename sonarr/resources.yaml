@@ -36,7 +36,7 @@ spec:
   accessModes:
   - ReadWriteOnce
   storageClassName: longhorn
-  volumeName: pvc-1eceb39f-2c77-4e55-9c95-3837aa7a0cef
+  volumeName: sonarr-vol-restored
   resources:
     requests:
       storage: 2Gi
