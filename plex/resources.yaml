@@ -36,7 +36,7 @@ spec:
   accessModes:
   - ReadWriteOnce
   storageClassName: longhorn
-  volumeName: pvc-d3c6f5cf-a04d-4e86-9346-0b8c70ea425b
+  volumeName: plex-vol-restored
   resources:
     requests:
       storage: 8Gi
