@@ -21,14 +21,7 @@ data:
 
     receivers:
       - name: homelab-alerts
-        webhook_configs:
-          - url: 'http://gotify-alertmanager.monitoring.svc.cluster.local:8080/homelab'
-            send_resolved: true
-
       - name: media-alerts
-        webhook_configs:
-          - url: 'http://gotify-alertmanager.monitoring.svc.cluster.local:8080/media'
-            send_resolved: true
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -110,72 +103,6 @@ data:
           method: GET
           follow_redirects: true
           preferred_ip_protocol: "ip4"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: gotify-alertmanager-script
-  namespace: monitoring
-data:
-  server.py: |
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    import json, urllib.request, urllib.parse, os
-
-    GOTIFY_URL = os.environ.get("GOTIFY_URL", "http://gotify.media.svc.cluster.local:80")
-    TOKEN_HOMELAB = os.environ.get("TOKEN_HOMELAB", "")
-    TOKEN_MEDIA = os.environ.get("TOKEN_MEDIA", "")
-    BARK_URL = os.environ.get("BARK_URL", "")
-    BARK_KEY = os.environ.get("BARK_KEY", "")
-
-    PRIORITY_MAP = {"critical": 10, "warning": 5}
-
-    def send_gotify(token, title, message, priority):
-        url = f"{GOTIFY_URL}/message?token={token}"
-        data = json.dumps({"title": title, "message": message, "priority": priority}).encode()
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        try:
-            urllib.request.urlopen(req)
-        except Exception as e:
-            print(f"Error sending to Gotify: {e}")
-
-    def send_bark(title, message, severity):
-        if not BARK_URL or not BARK_KEY:
-            return
-        level = "critical" if severity == "critical" else "active"
-        t = urllib.parse.quote(title)
-        m = urllib.parse.quote(message or " ")
-        url = f"{BARK_URL}/{BARK_KEY}/{t}/{m}?level={level}"
-        try:
-            urllib.request.urlopen(url, timeout=5)
-        except Exception as e:
-            print(f"Error sending to Bark: {e}")
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length))
-            token = TOKEN_HOMELAB if "/homelab" in self.path else TOKEN_MEDIA
-
-            for alert in body.get("alerts", []):
-                status = alert.get("status", "firing")
-                labels = alert.get("labels", {})
-                annotations = alert.get("annotations", {})
-                severity = labels.get("severity", "warning")
-                summary = annotations.get("summary", labels.get("alertname", "Alert"))
-                description = annotations.get("description", "")
-                prefix = "✅ Resolved: " if status == "resolved" else ("🚨 " if severity == "critical" else "⚠️ ")
-                title = f"{prefix}{summary}"
-                priority = 5 if status == "resolved" else PRIORITY_MAP.get(severity, 5)
-                send_gotify(token, title, description, priority)
-                send_bark(title, description, severity if status != "resolved" else "resolved")
-
-            self.send_response(200)
-            self.end_headers()
-
-        def log_message(self, format, *args):
-            print(f"{self.address_string()} - {format % args}")
-
-    HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
 ---
 apiVersion: v1
 kind: ConfigMap

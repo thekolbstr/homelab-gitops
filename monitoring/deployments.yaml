@@ -222,74 +222,6 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gotify-alertmanager
-  namespace: monitoring
-spec:
-  replicas: 1
-  revisionHistoryLimit: 10
-  selector:
-    matchLabels:
-      app: gotify-alertmanager
-  strategy:
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        app: gotify-alertmanager
-    spec:
-      containers:
-      - command:
-        - python
-        - /app/server.py
-        env:
-        - name: GOTIFY_URL
-          value: http://gotify.media.svc.cluster.local:80
-        - name: TOKEN_HOMELAB
-          value: ADkuuluxoitlLLb
-        - name: TOKEN_MEDIA
-          value: Aq3MrwJa7aC_u.V
-        - name: BARK_URL
-          value: http://bark.media.svc.cluster.local:8080
-        - name: BARK_KEY
-          value: MUnf3Mv6oGuEoureDjy6VT
-        image: python:3.12-slim
-        imagePullPolicy: IfNotPresent
-        name: gotify-alertmanager
-        ports:
-        - containerPort: 8080
-          protocol: TCP
-        resources:
-          limits:
-            cpu: 100m
-            memory: 128Mi
-          requests:
-            cpu: 25m
-            memory: 32Mi
-        volumeMounts:
-        - mountPath: /app/server.py
-          name: script
-          subPath: server.py
-        readinessProbe:
-          tcpSocket:
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 15
-        livenessProbe:
-          tcpSocket:
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 20
-      volumes:
-      - configMap:
-          name: gotify-alertmanager-script
-        name: script
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: kube-state-metrics
   namespace: monitoring
 spec:
@@ -469,17 +401,6 @@ spec:
   selector:
     matchLabels:
       app: blackbox-exporter
----
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: gotify-alertmanager
-  namespace: monitoring
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      app: gotify-alertmanager
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
