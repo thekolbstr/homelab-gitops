@@ -36,7 +36,7 @@ spec:
   accessModes:
   - ReadWriteOnce
   storageClassName: longhorn
-  volumeName: pvc-1d6bb3c0-5888-4898-8e03-16e7deb84a96
+  volumeName: radarr-vol-restored
   resources:
     requests:
       storage: 10Gi
