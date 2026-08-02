@@ -1,8 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - resources.yaml
-# migrate-job.yaml is intentionally NOT listed here -- it's a one-shot Job,
-# applied manually once via `kubectl apply -f pihole/migrate-job.yaml` and
-# then deleted. Kustomize/ArgoCD managing a completed Job long-term causes
-# perpetual OutOfSync noise since Job specs are immutable after creation.
