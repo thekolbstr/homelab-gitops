@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uptime-kuma-data
+  namespace: uptime-kuma
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: uptime-kuma
+  template:
+    metadata:
+      labels:
+        app: uptime-kuma
+    spec:
+      containers:
+      - name: uptime-kuma
+        image: louislam/uptime-kuma:1
+        ports:
+        - containerPort: 3001
+          name: http
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: uptime-kuma-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  type: ClusterIP
+  selector:
+    app: uptime-kuma
+  ports:
+  - name: http
+    port: 3001
+    targetPort: 3001
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: kuma.home.arpa
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: uptime-kuma
+            port:
+              number: 3001
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: uptime-kuma
